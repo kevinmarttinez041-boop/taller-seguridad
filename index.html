@@ -1,25 +1,31 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Centro de Control - CESBA</title>
-    <style>
-        body { font-family: sans-serif; background: #0f172a; color: white; text-align: center; padding: 5% 1rem; margin:0;}
-        .container { border: 1px solid #334155; padding: 2rem; border-radius: 1rem; display: inline-block; background: #1e293b; width: 100%; max-width: 400px; }
-        form { display: flex; flex-direction: column; gap: 12px; margin-top: 1.5rem; text-align: left; }
-        input { padding: 10px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: white; }
-        button { margin-top: 8px; padding: 12px; border: none; border-radius: 6px; background: #8b5cf6; color: white; font-weight: bold; cursor: pointer; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1 style="color:#10b981; font-size:1.8rem; margin-top:0;">🚀 Enlace al Edge</h1>
-        <form action="https://apicontactos.kevinmarttinez041.workers.dev/" method="POST">
-            <label style="color:#94a3b8; font-size:0.85rem;">Matrícula Oficial CESBA:</label>
-            <input type="text" name="matricula" placeholder="Ej. 123456" required>
-            <button type="submit">Autenticar y Desplegar</button>
-        </form>
-    </div>
-</body>
-</html>
+export default {
+  async fetch(request, env) {
+    const pais = request.cf?.country || "Desconocido";
+    const ciudad = request.cf?.city || "Desconocida";
+    const ip = request.headers.get("CF-Connecting-IP") || "0.0.0.0";
+
+    if (pais !== "MX") return new Response(`🛑 ACCESO DENEGADO desde ${pais}`, { status: 403 });
+
+    if (request.method === "POST") {
+      const formData = await request.formData();
+      const matricula = formData.get("matricula");
+
+      const apiResponse = await fetch("https://script.google.com/macros/s/AKfycbyCP0zlB95ADZk1kOZ5qZFh7LSHfMUwi0S3bPFLXai2TXCQw_guuO3-PpvGf3Y_LMPPBQ/exec", {
+        method: "POST", body: JSON.stringify({ action: "webhook", matricula: matricula })
+      });
+      const validacion = await apiResponse.json();
+
+      if (validacion.status === "error") return new Response(`🛑 ERROR: ${validacion.message}`, { status: 403 });
+
+      const registroSeguro = {
+        matricula: matricula, nombre_oficial: validacion.nombre,
+        auditoria_edge: { ip_visitante: ip, ciudad: ciudad, fecha: new Date().toLocaleString() }
+      };
+      await env.CONTACTOS.put(matricula, JSON.stringify(registroSeguro));
+
+      return new Response(`✅ Bienvenido ${validacion.nombre}.`, { headers: { "Access-Control-Allow-Origin": "*" }});
+    }
+    return new Response(`🛡️ Escudo Activo. IP (${ip}). Esperando Matrícula.`);
+  }
+};
 
